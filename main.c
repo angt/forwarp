@@ -275,8 +275,6 @@ main(int argc, char **argv)
 
         if ((fds[src].revents & POLLIN) && !fwp_recv(&fwp[src], &pkt) &&
             (!memcmp(pkt.x.s.ll, fwp[src].addr.ll, ETH_ALEN))) {
-            fprintf(stderr, "Forward ARP Request %d.%d.%d.%d\n",
-                    pkt.x.t.ip[0], pkt.x.t.ip[1], pkt.x.t.ip[2], pkt.x.t.ip[3]);
 
             memcpy(pkt.x.eth.h_source, fwp[dst].addr.ll, sizeof(fwp[dst].addr.ll));
             memcpy(pkt.x.s.ll, fwp[dst].addr.ll, sizeof(pkt.x.s.ll));
@@ -295,15 +293,8 @@ main(int argc, char **argv)
             }
         }
 
-        if ((fds[dst].revents & POLLIN) && !fwp_recv(&fwp[dst], &pkt)) {
-            fprintf(stderr, "Add neigh %02x:%02x:%02x:%02x:%02x:%02x"
-                            " as %d.%d.%d.%d\n",
-                    pkt.x.s.ll[0], pkt.x.s.ll[1], pkt.x.s.ll[2],
-                    pkt.x.s.ll[3], pkt.x.s.ll[4], pkt.x.s.ll[5],
-                    pkt.x.s.ip[0], pkt.x.s.ip[1], pkt.x.s.ip[2], pkt.x.s.ip[3]);
-
+        if ((fds[dst].revents & POLLIN) && !fwp_recv(&fwp[dst], &pkt))
             fwp_neigh(fwp[src].index, &pkt.x.s);
-        }
     }
 
     return 0;
