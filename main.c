@@ -1,6 +1,4 @@
-#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
-#endif
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -274,7 +272,7 @@ main(int argc, char **argv)
         }
 
         if ((fds[src].revents & POLLIN) && !fwp_recv(&fwp[src], &pkt) &&
-            (!memcmp(pkt.x.s.ll, fwp[src].addr.ll, ETH_ALEN))) {
+            (!memcmp(pkt.x.s.ll, fwp[src].addr.ll, sizeof(pkt.x.s.ll)))) {
 
             memcpy(pkt.x.eth.h_source, fwp[dst].addr.ll, sizeof(fwp[dst].addr.ll));
             memcpy(pkt.x.s.ll, fwp[dst].addr.ll, sizeof(pkt.x.s.ll));
@@ -282,8 +280,8 @@ main(int argc, char **argv)
 
             if (send(fwp[dst].fd, &pkt.x, sizeof(pkt.x), 0) == -1) {
                 switch (errno) {
-                case EINTR:
-                case EAGAIN:
+                case EINTR:     /* FALLTHRU */
+                case EAGAIN:    /* FALLTHRU */
                 case ENETDOWN:
                     break;
                 default:
@@ -296,6 +294,4 @@ main(int argc, char **argv)
         if ((fds[dst].revents & POLLIN) && !fwp_recv(&fwp[dst], &pkt))
             fwp_neigh(fwp[src].index, &pkt.x.s);
     }
-
-    return 0;
 }
