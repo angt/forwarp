@@ -1,18 +1,18 @@
-NAME    := forwarp
-CFLAGS  ?= -std=c11 -O2 -Wall -fstack-protector-strong
-FLAGS   := $(CFLAGS) $(LDFLAGS) $(CPPFLAGS)
+CC     = cc
+CFLAGS = -Wall -O2 -Wextra
+prefix = /usr/local
 
-CC      ?= cc
-Q       := @
+forwarp:
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) forwarp.c -o forwarp
 
-ifneq ($(X),)
-    H = $(X)-
-    FLAGS += -static
-endif
+install: forwarp
+	mkdir -p $(DESTDIR)$(prefix)/bin
+	mv -f forwarp $(DESTDIR)$(prefix)/bin
 
-$(NAME): main.c
-	$(Q)$(H)$(CC) $(FLAGS) -o $@ $^
+uninstall:
+	rm -f $(DESTDIR)$(prefix)/bin/forwarp
 
-.PHONY: clean
 clean:
-	$(Q)git clean -Xf
+	rm -f forwarp
+
+.PHONY: forwarp install uninstall clean

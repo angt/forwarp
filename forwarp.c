@@ -155,7 +155,7 @@ fwp_attr(struct nlmsghdr *n, int type, const void *data, unsigned size)
 }
 
 static int
-fwp_neigh(int ifindex, struct fwp_addr *addr)
+fwp_neigh(int ifindex, struct fwp_addr *addr, int nud_state)
 {
     int fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
 
@@ -177,7 +177,7 @@ fwp_neigh(int ifindex, struct fwp_addr *addr)
         },
         .ndm = {
             .ndm_family = AF_INET,
-            .ndm_state = NUD_REACHABLE,
+            .ndm_state = nud_state,
             .ndm_ifindex = ifindex,
         },
     };
@@ -224,9 +224,19 @@ main(int argc, char **argv)
 {
     fwp_set_signal();
 
-    if (argc != 3) {
-        printf("usage: %s IFSRC IFDST\n", argv[0]);
+    if (argc != 3 && argc != 4) {
+        printf("usage: %s IFSRC IFDST [permanent]\n", argv[0]);
         return 1;
+    }
+
+    int nud_state = NUD_REACHABLE;
+
+    if (argc == 4) {
+        if (strcmp(argv[3], "permanent")) {
+            printf("bad arg: %s\n", argv[3]);
+            return 1;
+        }
+        nud_state = NUD_PERMANENT;
     }
 
     enum {src, dst, count};
@@ -292,6 +302,6 @@ main(int argc, char **argv)
         }
 
         if ((fds[dst].revents & POLLIN) && !fwp_recv(&fwp[dst], &pkt))
-            fwp_neigh(fwp[src].index, &pkt.x.s);
+            fwp_neigh(fwp[src].index, &pkt.x.s, nud_state);
     }
 }
