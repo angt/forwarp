@@ -57,19 +57,16 @@ fwp_init(struct fwp *fwp, char *name, unsigned op)
         perror("socket");
         return 1;
     }
-
     if (ioctl(fwp->fd, SIOCGIFINDEX, &ifr) || ifr.ifr_ifindex <= 0) {
         fprintf(stderr, "No interface %s found!\n", ifr.ifr_name);
         return 1;
     }
-
     fwp->index = ifr.ifr_ifindex;
 
     if (ioctl(fwp->fd, SIOCGIFHWADDR, &ifr)) {
         fprintf(stderr, "Unable to find the hwaddr of %s\n", ifr.ifr_name);
         return 1;
     }
-
     memcpy(&fwp->addr.ll,
            &ifr.ifr_hwaddr.sa_data, ETH_ALEN);
 
@@ -77,7 +74,6 @@ fwp_init(struct fwp *fwp, char *name, unsigned op)
         fprintf(stderr, "Unable to find the addr of %s\n", ifr.ifr_name);
         return 1;
     }
-
     memcpy(&fwp->addr.ip,
            &((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr, 4);
 
@@ -93,12 +89,10 @@ fwp_listen(struct fwp *fwp)
         .sll_protocol = htons(ETH_P_ALL),
         .sll_ifindex = fwp->index,
     };
-
     if (bind(fwp->fd, (struct sockaddr *)&sll, sizeof(sll)) == -1) {
         perror("bind");
         return 1;
     }
-
     struct sock_filter filter[] = {
         {0x28, 0, 0, 0x0000000c},
         {0x15, 0, 3, 0x00000806},
@@ -107,18 +101,15 @@ fwp_listen(struct fwp *fwp)
         {0x06, 0, 0, 0x00040000},
         {0x06, 0, 0, 0x00000000},
     };
-
     struct sock_fprog bpf = {
         .len = COUNT(filter),
         .filter = filter,
     };
-
     if (setsockopt(fwp->fd, SOL_SOCKET, SO_ATTACH_FILTER,
                    &bpf, sizeof(bpf)) == -1) {
         perror("setsockopt(SO_ATTACH_FILTER)");
         return 1;
     }
-
     return 0;
 }
 
@@ -132,7 +123,6 @@ fwp_recv(struct fwp *fwp, union fwp_pkt *pkt)
             perror("recv");
         return -1;
     }
-
     if ((pkt->x.arp.ar_op != htons(fwp->op)) ||
         (pkt->x.arp.ar_hln != sizeof(pkt->x.s.ll)) ||
         (pkt->x.arp.ar_pln != sizeof(pkt->x.s.ip)))
@@ -163,7 +153,6 @@ fwp_neigh(int ifindex, struct fwp_addr *addr, int nud_state)
         perror("socket(netlink)");
         return 1;
     }
-
     struct {
         struct nlmsghdr nh;
         struct ndmsg ndm;
@@ -181,14 +170,12 @@ fwp_neigh(int ifindex, struct fwp_addr *addr, int nud_state)
             .ndm_ifindex = ifindex,
         },
     };
-
     fwp_attr(&req.nh, NDA_DST, addr->ip, sizeof(addr->ip));
     fwp_attr(&req.nh, NDA_LLADDR, addr->ll, sizeof(addr->ll));
 
     struct sockaddr_nl snl = {
         .nl_family = AF_NETLINK,
     };
-
     if (sendto(fd, &req, req.nh.nlmsg_len, 0,
                (struct sockaddr *)&snl, sizeof(snl)) == -1)
         perror("send(netlink)");
@@ -203,7 +190,6 @@ fwp_set_signal(void)
     struct sigaction sa = {
         .sa_flags = 0,
     };
-
     sigemptyset(&sa.sa_mask);
 
     sa.sa_handler = fwp_sa_handler;
@@ -228,7 +214,6 @@ main(int argc, char **argv)
         printf("usage: %s IFSRC IFDST [permanent]\n", argv[0]);
         return 1;
     }
-
     int nud_state = NUD_REACHABLE;
 
     if (argc == 4) {
@@ -238,7 +223,6 @@ main(int argc, char **argv)
         }
         nud_state = NUD_PERMANENT;
     }
-
     enum {src, dst, count};
     struct fwp fwp[count];
 
@@ -269,7 +253,6 @@ main(int argc, char **argv)
         {.fd = fwp[src].fd, .events = POLLIN},
         {.fd = fwp[dst].fd, .events = POLLIN},
     };
-
     while (!fwp_quit) {
         int p = poll(fds, COUNT(fds), -1);
 
@@ -280,7 +263,6 @@ main(int argc, char **argv)
             }
             continue;
         }
-
         if ((fds[src].revents & POLLIN) && !fwp_recv(&fwp[src], &pkt) &&
             (!memcmp(pkt.x.s.ll, fwp[src].addr.ll, sizeof(pkt.x.s.ll)))) {
 
@@ -300,7 +282,6 @@ main(int argc, char **argv)
                 }
             }
         }
-
         if ((fds[dst].revents & POLLIN) && !fwp_recv(&fwp[dst], &pkt))
             fwp_neigh(fwp[src].index, &pkt.x.s, nud_state);
     }
