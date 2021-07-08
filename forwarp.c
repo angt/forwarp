@@ -203,24 +203,18 @@ main(int argc, char **argv)
 {
     fwp_set_signal();
 
-    if (argc != 4 && argc != 5) {
-        printf("usage: %s IFSRC IFDST IP [permanent]\n", argv[0]);
+    if (argc != 3 && argc != 4) {
+        printf("usage: %s IFSRC IFDST [IP]\n", argv[0]);
         return 1;
     }
-    int nud_state = NUD_REACHABLE;
+    const int ip = argc == 4;
+    const int nud_state = NUD_REACHABLE;
 
-    if (argc == 5) {
-        if (strcmp(argv[3], "permanent")) {
-            printf("bad arg: %s\n", argv[3]);
-            return 1;
-        }
-        nud_state = NUD_PERMANENT;
-    }
     enum {src, dst, count};
     struct fwp fwp[count] = {0};
     struct fwp_addr arply;
 
-    if (inet_pton(AF_INET, argv[3], &arply.ip) != 1) {
+    if (ip && inet_pton(AF_INET, argv[3], &arply.ip) != 1) {
         fprintf(stderr, "Unable to parse ip %s\n", argv[3]);
         return 1;
     }
@@ -240,7 +234,7 @@ main(int argc, char **argv)
            fwp[dst].addr.ll[2], fwp[dst].addr.ll[3],
            fwp[dst].addr.ll[4], fwp[dst].addr.ll[5]);
 
-    if (fwp_listen(&fwp[0]) || fwp_listen(&fwp[1]))
+    if (fwp_listen(&fwp[src]) || fwp_listen(&fwp[dst]))
         return 1;
 
     union fwp_pkt pkt;
@@ -261,7 +255,7 @@ main(int argc, char **argv)
         }
         if ((fds[src].revents & POLLIN) && !fwp_recv(&fwp[src], &pkt)) {
             if (!memcmp(pkt.x.s.ll, fwp[src].addr.ll, sizeof(pkt.x.s.ll))) {
-                memcpy(pkt.x.eth.h_source, fwp[dst].addr.ll, sizeof(fwp[dst].addr.ll));
+                memcpy(pkt.x.eth.h_source, fwp[dst].addr.ll, sizeof(pkt.x.eth.h_source));
                 memcpy(&pkt.x.s, &fwp[dst].addr, sizeof(pkt.x.s));
 
                 if (send(fwp[dst].fd, &pkt.x, sizeof(pkt.x), 0) == -1) {
@@ -275,8 +269,7 @@ main(int argc, char **argv)
                         return 1;
                     }
                 }
-            }
-            if (!memcmp(pkt.x.t.ip, arply.ip, sizeof(pkt.x.t.ip))) {
+            } else if (ip && !memcmp(pkt.x.t.ip, arply.ip, sizeof(pkt.x.t.ip))) {
                 memcpy(&pkt.x.t, &pkt.x.s, sizeof(pkt.x.t));
                 memcpy(&pkt.x.s, &arply, sizeof(pkt.x.s));
                 memcpy(pkt.x.eth.h_dest, pkt.x.eth.h_source, sizeof(pkt.x.eth.h_dest));
