@@ -198,31 +198,44 @@ fwp_set_signal(void)
     sigaction(SIGHUP, &sa, NULL);
 }
 
+static uint32_t
+ipmask(unsigned char a[4], uint32_t mask)
+{
+    uint32_t tmp;
+    memcpy(&tmp, a, 4);
+    return tmp & mask;
+}
+
 int
 main(int argc, char **argv)
 {
     fwp_set_signal();
 
-    if (argc != 3 && argc != 4) {
-        printf("usage: %s IFSRC IFDST [IP]\n", argv[0]);
+    if (argc < 3 || argc > 5) {
+        printf("usage: %s IFSRC IFDST [IP [MASK]]\n", argv[0]);
         return 1;
     }
-    const int ip = argc == 4;
+    uint32_t ip = 0;
+    uint32_t mask = -1;
     const int nud_state = NUD_REACHABLE;
 
     enum {src, dst, count};
     struct fwp fwp[count] = {0};
-    struct fwp_addr arply;
 
-    if (ip && inet_pton(AF_INET, argv[3], &arply.ip) != 1) {
-        fprintf(stderr, "Unable to parse ip %s\n", argv[3]);
-        return 1;
+    if (argc >= 4) {
+        if (inet_pton(AF_INET, argv[3], &ip) != 1) {
+            fprintf(stderr, "Unable to parse ip %s\n", argv[3]);
+            return 1;
+        }
+        if (argc == 5 && inet_pton(AF_INET, argv[4], &mask) != 1) {
+            fprintf(stderr, "Unable to parse mask %s\n", argv[4]);
+            return 1;
+        }
+        ip &= mask;
     }
     if (fwp_init(&fwp[src], argv[1], ARPOP_REQUEST) ||
         fwp_init(&fwp[dst], argv[2], ARPOP_REPLY))
         return 1;
-
-    memcpy(arply.ll, fwp[src].addr.ll, sizeof(arply.ll));
 
     printf("Start forwarding ARP Request:\n"
            " src %02x:%02x:%02x:%02x:%02x:%02x\n"
@@ -269,11 +282,14 @@ main(int argc, char **argv)
                         return 1;
                     }
                 }
-            } else if (ip && !memcmp(pkt.x.t.ip, arply.ip, sizeof(pkt.x.t.ip))) {
+            } else if (ip && (ipmask(pkt.x.t.ip, mask) == ip)) {
+                unsigned char tmp[4];
+                memcpy(&tmp, &pkt.x.t.ip, sizeof(tmp));
                 memcpy(&pkt.x.t, &pkt.x.s, sizeof(pkt.x.t));
-                memcpy(&pkt.x.s, &arply, sizeof(pkt.x.s));
+                memcpy(&pkt.x.s.ll, &fwp[src].addr.ll, sizeof(pkt.x.s.ll));
+                memcpy(&pkt.x.s.ip, &tmp, sizeof(pkt.x.s.ip));
                 memcpy(pkt.x.eth.h_dest, pkt.x.eth.h_source, sizeof(pkt.x.eth.h_dest));
-                memcpy(pkt.x.eth.h_source, arply.ll, sizeof(pkt.x.eth.h_source));
+                memcpy(pkt.x.eth.h_source, &fwp[src].addr.ll, sizeof(pkt.x.eth.h_source));
                 pkt.x.arp.ar_op = htons(ARPOP_REPLY);
 
                 if (send(fwp[src].fd, &pkt.x, sizeof(pkt.x), 0) == -1) {
