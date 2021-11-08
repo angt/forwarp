@@ -378,15 +378,17 @@ fwp_ctl_init(struct fwp_ctl *ctl, const char *id, int client)
     union fwp_sun sock = {
         .sun.sun_family = AF_UNIX,
     };
-    if (mkdir(FWP_PATH, 0700) == -1 && errno != EEXIST)
-        return -1;
+    if (mkdir(FWP_PATH, 0700) == -1 && errno != EEXIST) {
+        perror("mkdir");
+        return 1;
+    }
 
     int ret = snprintf(sock.sun.sun_path, sizeof(sock.sun.sun_path),
                        "%s/%s", FWP_PATH, id);
 
     if (ret <= 0 || (size_t)ret >= sizeof(sock.sun.sun_path)) {
-        errno = EINVAL;
-        return -1;
+        fprintf(stderr, "Unable to use id %s. Too big?\n", id);
+        return 1;
     }
     ctl->sock = sock;
 
@@ -395,25 +397,26 @@ fwp_ctl_init(struct fwp_ctl *ctl, const char *id, int client)
                        "%s/.%d", FWP_PATH, getpid());
 
         if (ret <= 0 || (size_t)ret >= sizeof(sock.sun.sun_path)) {
-            errno = EINVAL;
-            return -1;
+            fprintf(stderr, "Unable to generate client's sun path ?!?\n");
+            return 1;
         }
     }
     ctl->del = sock;
 
-    if (unlink(sock.sun.sun_path) && errno != ENOENT)
-        return -1;
-
+    if (unlink(sock.sun.sun_path) && errno != ENOENT) {
+        perror("unlink");
+        return 1;
+    }
     int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
 
-    if (fd == -1)
-        return -1;
-
+    if (fd == -1) {
+        perror("socket(AF_UNIX)");
+        return 1;
+    }
     if (bind(fd, &sock.sa, sizeof(sock))) {
-        int err = errno;
+        perror("bind");
         close(fd);
-        errno = err;
-        return -1;
+        return 1;
     }
     ctl->fd = fd;
     return 0;
@@ -436,10 +439,9 @@ fwp_run(const char *id, const char *ifsrc, const char *ifdst)
     struct fwp fwp[count] = {0};
     struct fwp_ctl ctl = {.fd = -1};
 
-    if (fwp_ctl_init(&ctl, id, 0)) {
-        perror("fwp_ctl_init");
+    if (fwp_ctl_init(&ctl, id, 0))
         return 1;
-    }
+
     if (fwp_init(&fwp[src], ifsrc, ARPOP_REQUEST) ||
         fwp_init(&fwp[dst], ifdst, ARPOP_REPLY))
         return 1;
